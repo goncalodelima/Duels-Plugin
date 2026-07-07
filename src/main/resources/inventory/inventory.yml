@@ -1,0 +1,44 @@
+duel:
+  size: 27
+  title: "ᴅᴜᴇʟѕ"
+  cancel:
+    material: "RED_STAINED_GLASS_PANE"
+    slot: 10
+    name: "<red>ᴄᴀɴᴄᴇʟ"
+    lore:
+      - "<white>Click to cancel"
+  wait:
+    material: "COMPASS"
+    slot: 12
+    name: "<yellow>ᴡᴀɪᴛ ᴛɪᴍᴇ"
+    lore:
+      - "<gray>Estimated Time: <white><time>"
+  statistics:
+    material: "GRAY_DYE"
+    slot: 14
+    name: "<yellow>ѕᴛᴀᴛɪѕᴛɪᴄѕ"
+    lore:
+      - "<gray>Wins: <white><wins>"
+      - "<gray>Losses: <white><losses>"
+      - "<gray>Streak: <white><streak>"
+      - "<gray>Max Streak: <white><max_streak>"
+  search:
+    material: "LIME_STAINED_GLASS_PANE"
+    slot: 16
+    name: "<green>ѕᴇᴀʀᴄʜ"
+    lore:
+      - "<white>Click to start searching for a match"
+  dialog:
+    title: "ᴅᴜᴇʟѕ"
+    inputs:
+      confirm:
+        label: "<color:#AEFFC1>Confirm"
+        tooltip: "Click to confirm your input."
+      cancel:
+        label: "<color:#FFA0B1>Discard"
+        tooltip: "Click to discard your input."
+      currency:
+        select: "Select the duel currency"
+        amount: "How much do you want to bet? Leave empty for none (items only)"
+      target:
+        label: "Enter your opponent's name. Leave empty for open combat"
