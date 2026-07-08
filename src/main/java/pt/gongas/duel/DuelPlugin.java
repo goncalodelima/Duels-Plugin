@@ -22,11 +22,15 @@
 package pt.gongas.duel;
 
 import co.aikar.commands.BukkitCommandManager;
+import com.github.sirblobman.combatlogx.api.ICombatLogX;
 import com.infernalsuite.asp.api.exceptions.*;
 import com.infernalsuite.asp.api.loaders.SlimeLoader;
 import com.infernalsuite.asp.api.world.properties.SlimePropertyMap;
+import org.bukkit.Bukkit;
 import org.bukkit.configuration.serialization.ConfigurationSerialization;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.redisson.api.RedissonClient;
 import pt.gongas.database.Database;
@@ -39,11 +43,11 @@ import pt.gongas.duel.listener.DuelListener;
 import pt.gongas.duel.listener.DuelMatchmakingListener;
 import pt.gongas.duel.listener.UserListener;
 import pt.gongas.duel.model.duel.DuelLocation;
-import pt.gongas.duel.redis.duel.DuelResultPublisher;
 import pt.gongas.duel.redis.duel.DuelResultRedisService;
 import pt.gongas.duel.repository.user.MySqlUserRepository;
 import pt.gongas.duel.repository.user.UserRepository;
 import pt.gongas.duel.runnable.DuelQueueRunnable;
+import pt.gongas.duel.runnable.DuelTimeoutRunnable;
 import pt.gongas.duel.service.duel.*;
 import pt.gongas.duel.service.PlayerNameService;
 import pt.gongas.duel.service.duel.invitation.DuelInvitationService;
@@ -66,11 +70,26 @@ import pt.gongas.redis.redis.RedisManager;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class DuelPlugin extends JavaPlugin {
+
+    private RetryService retryService;
+
+    private DuelRedirectService duelRedirectService;
+
+    private DuelResultRedisService duelResultRedisService;
+
+    private DuelInvitationService duelInvitationService;
+
+    private ExecutorService redisExecutor;
+
+    private ExecutorService worldExecutor;
+
+    private ExecutorService databaseExecutor;
 
     @Override
     public void onEnable() {
@@ -79,6 +98,7 @@ public class DuelPlugin extends JavaPlugin {
         ConfigurationSerialization.registerClass(DuelLocation.class);
 
         String serverId = getConfig().getString("server_id", "unknown");
+        UUID sessionUuid = UUID.randomUUID();
 
         Configuration lang = new Configuration(this, "lang", "lang.yml");
         lang.saveDefaultConfig();
@@ -90,10 +110,10 @@ public class DuelPlugin extends JavaPlugin {
         locations.saveDefaultConfig();
 
         RedissonClient redissonClient = RedisManager.getClient();
-        ScheduledExecutorService redisExecutor = Executors.newSingleThreadScheduledExecutor();
+        redisExecutor = Executors.newSingleThreadScheduledExecutor();
 
-        ExecutorService worldExecutor = Executors.newVirtualThreadPerTaskExecutor();
-        ExecutorService databaseExecutor = Executors.newVirtualThreadPerTaskExecutor();
+        worldExecutor = Executors.newVirtualThreadPerTaskExecutor();
+        databaseExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
         File serverFolder;
 
@@ -147,40 +167,108 @@ public class DuelPlugin extends JavaPlugin {
 
         DuelUserSnapshotApplier userSnapshotApplier = new DuelUserSnapshotApplier(duelUserService);
 
-        RetryService retryService = new RetryService(getLogger());
-        DuelResultPublisher duelResultRedisService = new DuelResultRedisService(this, getLogger(), userSnapshotApplier, redissonClient, redisExecutor);
+        retryService = new RetryService(getLogger());
+        duelResultRedisService = new DuelResultRedisService(this, getLogger(), userSnapshotApplier, redissonClient, redisExecutor);
 
         DuelUserStateService duelUserStateService = new DuelUserStateService(this, duelUserService, retryService, duelResultRedisService, userSnapshotApplier, databaseExecutor);
 
         PlayerNameService playerNameService = new PlayerNameService(redissonClient);
         DuelMatchmakingService duelMatchmakingService = new DuelMatchmakingService(this, serverId, getLogger(), retryService, redisExecutor, redissonClient);
 
-        DuelInvitationService duelInvitationService = new DuelInvitationService(this, serverId, getLogger(), redisExecutor, redissonClient, lang);
-        DuelRedirectService duelRedirectService = new DuelRedirectService(this, serverId, redissonClient, economyApi, duelInvitationService);
+        duelInvitationService = new DuelInvitationService(this, serverId, getLogger(), redisExecutor, redissonClient, lang);
+        duelRedirectService = new DuelRedirectService(this, serverId, sessionUuid, redissonClient, economyApi, duelInvitationService);
 
         DuelWorldService duelWorldService = new DuelWorldService(this, getLogger(), worldExecutor, advancedSlimePaperAPI, duelTemplateWorld);
         DuelLocationService duelLocationService = new DuelLocationService(this, serverId, getLogger(), locations);
 
         DuelStateRegistry duelStateRegistry = new DuelStateRegistry();
 
-        DuelAcceptanceService duelAcceptanceService = new DuelAcceptanceService(this, serverId, getLogger(), datacenter, playerNameService, duelStateRegistry, duelInvitationService, duelRedirectService, duelWorldService, duelLocationService, duelMatchmakingService, economyApi, databaseExecutor, redisExecutor, advancedSlimePaperAPI, lang);
-        DuelService duelService = new DuelService(this, serverId, getLogger(), redisExecutor, playerNameService, duelAcceptanceService, duelMatchmakingService, duelInvitationService, economyApi, lang);
+        DuelAcceptanceService duelAcceptanceService = new DuelAcceptanceService(this, serverId, sessionUuid, getLogger(), datacenter, playerNameService, duelStateRegistry, duelInvitationService, duelRedirectService, duelWorldService, duelLocationService, duelMatchmakingService, economyApi, databaseExecutor, redisExecutor, advancedSlimePaperAPI, lang);
+        DuelService duelService = new DuelService(this, serverId, sessionUuid, getLogger(), redisExecutor, playerNameService, duelStateRegistry, duelAcceptanceService, duelMatchmakingService, duelInvitationService, economyApi, lang);
 
         DuelInventory duelInventory = new DuelInventory(this, duelService, duelMatchmakingService, inventory, lang);
         getServer().getPluginManager().registerEvents(duelInventory, this);
 
-        getServer().getPluginManager().registerEvents(new DuelListener(this, getLogger(), duelStateRegistry, duelRedirectService, duelWorldService, duelLocationService, duelUserStateService, duelAcceptanceService, economyApi, lang), this);
+        getServer().getPluginManager().registerEvents(new DuelListener(this, getLogger(), duelStateRegistry, duelRedirectService, duelWorldService, duelLocationService, duelUserStateService, duelAcceptanceService, economyApi, getCombatLog(), lang), this);
         getServer().getPluginManager().registerEvents(new UserListener(this, duelUserService, lang), this);
-        getServer().getPluginManager().registerEvents(new DuelMatchmakingListener(serverId, duelAcceptanceService, duelMatchmakingService, lang), this);
+        getServer().getPluginManager().registerEvents(new DuelMatchmakingListener(serverId, sessionUuid, duelAcceptanceService, duelMatchmakingService, lang), this);
 
         BukkitCommandManager commandManager = new BukkitCommandManager(this);
         commandManager.enableUnstableAPI("help");
         commandManager.registerCommand(new DuelCommand(this, duelUserService, duelAcceptanceService, duelLocationService, duelInventory, lang));
 
         new DuelQueueRunnable(duelMatchmakingService, lang).runTaskTimer(this, 20, 20);
+        new DuelTimeoutRunnable(this, advancedSlimePaperAPI, duelStateRegistry, duelWorldService, duelLocationService, lang).runTaskTimer(this, 20 * 60 * 5, 20 * 60 * 5);
 
         getServer().getMessenger().registerOutgoingPluginChannel(this, "BungeeCord");
 
+    }
+
+    @Override
+    public void onDisable() {
+
+        // Shut down the retry service before the other executors to prevent
+        // scheduled retry tasks from submitting new work during shutdown.
+        retryService.shutdown();
+
+        // Redis only stores information that is useful during the lifetime of a process.
+        // Therefore, we can safely force a shutdown without waiting for the tasks scheduled on the redisExecutor to execute
+        redisExecutor.shutdownNow();
+
+        try {
+
+            if (!redisExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                getLogger().warning("Redis executor did not terminate in time.");
+            }
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        // Data cleanup must be performed after shutting down the Redis executor
+        // to ensure that no tasks are executed after the data is cleared.
+        duelRedirectService.shutdown();
+        duelResultRedisService.shutdown();
+        duelInvitationService.shutdown();
+
+        databaseExecutor.shutdown();
+
+        try {
+            // Wait for currently executing tasks to finish
+            if (!databaseExecutor.awaitTermination(36, TimeUnit.SECONDS)) {
+                // Force shutdown if tasks are not finished in the given time
+                databaseExecutor.shutdownNow();
+                // Wait for tasks to respond to being cancelled
+                if (!databaseExecutor.awaitTermination(36, TimeUnit.SECONDS)) {
+                    System.err.println("Database Executor did not terminate in the specified time.");
+                }
+            }
+        } catch (InterruptedException ie) {
+            // (Re-)Cancel if current thread also interrupted
+            databaseExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
+        // The threads in this pool are daemon threads used only to create non-persistent worlds.
+        // Therefore, it is safe to force the executor to shut down.
+        worldExecutor.shutdownNow();
+
+        try {
+
+            if (!worldExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                getLogger().warning("World executor did not terminate in time.");
+            }
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+    }
+
+    public ICombatLogX getCombatLog() {
+        PluginManager pluginManager = Bukkit.getPluginManager();
+        Plugin plugin = pluginManager.getPlugin("CombatLogX");
+        return (ICombatLogX) plugin;
     }
 
 }

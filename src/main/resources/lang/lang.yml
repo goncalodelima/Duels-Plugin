@@ -29,6 +29,8 @@ opponent-no-enough-balance: "<red>Your opponent doesn't have enough money for th
 someone-without-enough-balance: "<red>One of the fighters in this duel doesn't have enough money for the duel's bet."
 challenger-logout: "<red>The player who challenged you to a duel logged out in the meantime! :("
 wrong-inserted-amount: "<red>You entered an invalid bet amount when accepting the duel."
+timeout: "<red>Your duel exceeded the 1-hour time limit, so it has been declared a draw."
+max-duels-reached: "<red>This server has reached its maximum number of active duels. You can try dueling on another server (use /spawn or /box to switch servers)."
 
 blacklisted-server: "<red>You cannot create a duel on a box server. Type '/spawn' and try again."
 

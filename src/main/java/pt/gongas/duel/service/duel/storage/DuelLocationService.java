@@ -80,9 +80,9 @@ public class DuelLocationService {
         this.challengedLocation = locations.getSerializable("challenged-location", DuelLocation.class);
     }
 
-    public CompletableFuture<Boolean> teleportToSpawn(@NotNull Player player, @NotNull Location exitLocation) {
+    public CompletableFuture<Boolean> teleportToSpawn(@NotNull Player player, @Nullable Location exitLocation) {
 
-        if (serverId.contains("smp")) {
+        if (exitLocation != null && serverId.contains("smp")) {
             return player.teleportAsync(exitLocation);
         }
 

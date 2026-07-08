@@ -56,12 +56,7 @@ repositories {
     maven("https://repo.infernalsuite.com/repository/maven-snapshots/") // AdvancedSlimePaper
     maven("https://repo.codemc.io/repository/goncalodelima/") // Economy-Plugin
     maven("https://repo.william278.net/releases") // HuskHomes
-}
-
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
+    maven("https://nexus.sirblobman.xyz/public/") // CombatLogX
 }
 
 group = "pt.gongas"
@@ -77,6 +72,8 @@ dependencies {
     implementation("co.aikar:acf-paper:0.5.1-SNAPSHOT")
     implementation("com.github.ben-manes.caffeine:caffeine:3.2.4")
     compileOnly("net.william278.huskhomes:huskhomes-bukkit:4.10")
+    compileOnly("com.github.sirblobman.api:core:2.9-SNAPSHOT")
+    compileOnly("com.github.sirblobman.combatlogx:api:11.6-SNAPSHOT")
 }
 
 tasks.withType<JavaCompile> {
@@ -87,7 +84,7 @@ bukkit {
     name = "duels-plugin"
     version = "${project.version}"
     main = "pt.gongas.duel.DuelPlugin"
-    depend = listOf("redis-plugin", "HuskHomes")
+    depend = listOf("redis-plugin", "HuskHomes", "CombatLogX")
     author = "ReeachyZ_"
     website = "https://github.com/goncalodelima"
     description = "Duels Plugin"

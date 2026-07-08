@@ -47,6 +47,28 @@ public class RetryService {
         this.logger = logger;
     }
 
+    public void shutdown() {
+
+        retryExecutor.shutdown();
+
+        try {
+            // Wait for currently executing tasks to finish
+            if (!retryExecutor.awaitTermination(36, TimeUnit.SECONDS)) {
+                // Force shutdown if tasks are not finished in the given time
+                retryExecutor.shutdownNow();
+                // Wait for tasks to respond to being cancelled
+                if (!retryExecutor.awaitTermination(36, TimeUnit.SECONDS)) {
+                    System.err.println("Retry Executor did not terminate in the specified time.");
+                }
+            }
+        } catch (InterruptedException ie) {
+            // (Re-)Cancel if current thread also interrupted
+            retryExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
+    }
+
     /**
      * Executes {@code task} on the provided executor, retrying with
      * exponential backoff (8s, 16s, 32s, ... doubling each attempt)

@@ -28,6 +28,7 @@ import net.kyori.adventure.text.TextReplacementConfig;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.title.TitlePart;
 import org.bukkit.Bukkit;
+import org.bukkit.GameRules;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -72,6 +73,8 @@ public class DuelAcceptanceService {
     private final DuelPlugin plugin;
 
     private final String serverId;
+
+    private final UUID sessionUuid;
 
     private final Logger logger;
 
@@ -119,10 +122,11 @@ public class DuelAcceptanceService {
 
     private static final String WORLD_PREFIX = "duel-";
 
-    public DuelAcceptanceService(DuelPlugin plugin, String serverId, Logger logger, Database datacenter, PlayerNameService playerNameService, DuelStateRegistry duelStateRegistry, DuelInvitationService duelInvitationService, DuelRedirectService duelRedirectService, DuelWorldService duelWorldService, DuelLocationService duelLocationService, DuelMatchmakingService duelMatchmakingService, EconomyApi<Player> economyApi, ExecutorService databaseExecutor, ExecutorService redisExecutor, AdvancedSlimePaperAPI advancedSlimePaperAPI, Configuration lang) {
+    public DuelAcceptanceService(DuelPlugin plugin, String serverId, UUID sessionUuid, Logger logger, Database datacenter, PlayerNameService playerNameService, DuelStateRegistry duelStateRegistry, DuelInvitationService duelInvitationService, DuelRedirectService duelRedirectService, DuelWorldService duelWorldService, DuelLocationService duelLocationService, DuelMatchmakingService duelMatchmakingService, EconomyApi<Player> economyApi, ExecutorService databaseExecutor, ExecutorService redisExecutor, AdvancedSlimePaperAPI advancedSlimePaperAPI, Configuration lang) {
 
         this.plugin = plugin;
         this.serverId = serverId;
+        this.sessionUuid = sessionUuid;
         this.logger = logger;
         this.datacenter = datacenter;
         this.playerNameService = playerNameService;
@@ -223,6 +227,13 @@ public class DuelAcceptanceService {
                         duelRedirectService.publishRedirectMessage(accepterUuid, accepterName, currencyName, duel);
                         Bukkit.getScheduler().runTaskLater(plugin, () -> BungeeRedirect.connect(plugin, player, duel.getServerId()), 20L);
                         return new DuelAcceptResultResponse(DuelAcceptResult.REDIRECT_SUCCESS, duel);
+                    }
+
+                    // This is a safety mechanism to handle unexpected server termination. If the server process crashes,
+                    // the shutdown logic is never executed, meaning the Redis data for players who were online at the time is not cleaned up.
+                    // This mechanism invalidates that stale data.
+                    if (!sessionUuid.equals(duel.getSessionUuid())) {
+                        return new DuelAcceptResultResponse(DuelAcceptResult.INVALID_REDIS_DATA, duel);
                     }
 
                     return new DuelAcceptResultResponse(DuelAcceptResult.NO_REDIRECT_SUCCESS, duel);
@@ -349,6 +360,8 @@ public class DuelAcceptanceService {
                     }
 
                     World world = slimeWorldInstance.getBukkitWorld();
+
+                    world.setGameRule(GameRules.KEEP_INVENTORY, false);
 
                     CompletableFuture<Boolean> t1 = challenger.teleportAsync(challengerLocation.toLocation(world));
                     CompletableFuture<Boolean> t2 = challenged.teleportAsync(challengedLocation.toLocation(world));

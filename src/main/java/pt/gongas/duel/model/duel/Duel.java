@@ -35,6 +35,9 @@ public class Duel {
     private final String serverId;
 
     @NotNull
+    private final UUID sessionUuid;
+
+    @NotNull
     private final UUID challengerUuid;
 
     @NotNull
@@ -63,6 +66,7 @@ public class Duel {
     @JsonCreator
     public Duel(
             @JsonProperty("serverId") @NotNull String serverId,
+            @JsonProperty("sessionUuid") @NotNull UUID sessionUuid,
             @JsonProperty("challengerUuid") @NotNull UUID challengerUuid,
             @JsonProperty("challengerName") @NotNull String challengerName,
             @JsonProperty("targetUuid") @Nullable UUID targetUuid,
@@ -74,6 +78,7 @@ public class Duel {
             @JsonProperty("status") @NotNull DuelStatus status
     ) {
         this.serverId = serverId;
+        this.sessionUuid = sessionUuid;
         this.challengerUuid = challengerUuid;
         this.challengerName = challengerName;
         this.targetUuid = targetUuid;
@@ -87,6 +92,10 @@ public class Duel {
 
     public @NotNull String getServerId() {
         return serverId;
+    }
+
+    public @NotNull UUID getSessionUuid() {
+        return sessionUuid;
     }
 
     public @NotNull UUID getChallengerUuid() {

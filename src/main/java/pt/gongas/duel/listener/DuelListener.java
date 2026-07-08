@@ -21,6 +21,9 @@
 
 package pt.gongas.duel.listener;
 
+import com.github.sirblobman.combatlogx.api.ICombatLogX;
+import com.github.sirblobman.combatlogx.api.object.TagReason;
+import com.github.sirblobman.combatlogx.api.object.TagType;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.title.TitlePart;
@@ -74,6 +77,8 @@ public class DuelListener implements Listener {
 
     private final EconomyApi<Player> economyApi;
 
+    private final ICombatLogX combatLogX;
+
     private final Component blockedPlayerMessage;
 
     private final Component blockedDuelMessage;
@@ -92,7 +97,7 @@ public class DuelListener implements Listener {
 
     private static final String DUEL_EXIT_COMMAND = "/spawn";
 
-    public DuelListener(DuelPlugin plugin, Logger logger, DuelStateRegistry duelStateRegistry, DuelRedirectService duelRedirectService, DuelWorldService duelWorldService, DuelLocationService duelLocationService, DuelUserStateService duelUserStateService, DuelAcceptanceService duelAcceptanceService, EconomyApi<Player> economyApi, Configuration lang) {
+    public DuelListener(DuelPlugin plugin, Logger logger, DuelStateRegistry duelStateRegistry, DuelRedirectService duelRedirectService, DuelWorldService duelWorldService, DuelLocationService duelLocationService, DuelUserStateService duelUserStateService, DuelAcceptanceService duelAcceptanceService, EconomyApi<Player> economyApi, ICombatLogX combatLogX, Configuration lang) {
 
         this.plugin = plugin;
         this.logger = logger;
@@ -103,6 +108,7 @@ public class DuelListener implements Listener {
         this.duelUserStateService = duelUserStateService;
         this.duelAcceptanceService = duelAcceptanceService;
         this.economyApi = economyApi;
+        this.combatLogX = combatLogX;
 
         MiniMessage miniMessage = MiniMessage.miniMessage();
 
@@ -150,27 +156,20 @@ public class DuelListener implements Listener {
 
                         Location exitLocation = duelLocationService.getExitLocation();
 
-                        if (exitLocation != null) {
+                        event.setCancelled(true);
 
-                            event.setCancelled(true);
+                        duelLocationService.teleportToSpawn(player, exitLocation)
+                                .whenComplete((result, ex) -> {
 
-                            duelLocationService.teleportToSpawn(player, exitLocation)
-                                    .whenComplete((result, ex) -> {
+                                    duelWorldService.attemptWorldDelete(duel.getChallengerUuid().toString(), () -> duelStateRegistry.removeDuel(uuid));
 
-                                        duelWorldService.attemptWorldDelete(duel.getChallengerUuid().toString(), () -> duelStateRegistry.removeDuel(uuid));
+                                    if (ex != null) {
+                                        plugin.getLogger().log(Level.SEVERE, "An exception occurred when teleporting the player after the player in a duel typed '/spawn' during item collection");
+                                    }
 
-                                        if (ex != null) {
-                                            plugin.getLogger().log(Level.SEVERE, "An exception occurred when teleporting the player after the player in a duel typed '/spawn' during item collection");
-                                        }
+                                });
 
-                                    });
-
-                        } else {
-
-                            Bukkit.getScheduler().runTaskLater(plugin,
-                                    () -> duelWorldService.attemptWorldDelete(duel.getChallengerUuid().toString(), () -> duelStateRegistry.removeDuel(uuid)), 20
-                            );
-
+                        if (exitLocation == null) {
                             throw new IllegalStateException("A duel has ended, and the exit location for teleporting the players to the spawn is not yet defined");
                         }
 
@@ -216,7 +215,7 @@ public class DuelListener implements Listener {
 
     }
 
-    @EventHandler(priority=EventPriority.LOW)
+    @EventHandler(priority = EventPriority.LOW)
     public void onPlayerQuit(PlayerQuitEvent event) {
 
         Player player = event.getPlayer();
@@ -265,7 +264,7 @@ public class DuelListener implements Listener {
         }
 
         if (duelEndReason == DuelEndReason.LOGOUT) {
-            loser.setHealth(0);
+            combatLogX.getCombatManager().tag(loser, null, TagType.UNKNOWN, TagReason.UNKNOWN);
             opponent.sendMessage(fighterLogoutMessage);
         } else {
             opponent.sendMessage(fighterDeathMessage);
@@ -310,10 +309,10 @@ public class DuelListener implements Listener {
 
             Location exitLocation = duelLocationService.getExitLocation();
 
-            if (exitLocation == null) {
-                duelWorldService.attemptWorldDelete(challengerUuid.toString(), () -> duelStateRegistry.removeDuel(opponentUuid));
-                return;
-            }
+//            if (exitLocation == null) {
+//                duelWorldService.attemptWorldDelete(challengerUuid.toString(), () -> duelStateRegistry.removeDuel(opponentUuid));
+//                return;
+//            }
 
             duelLocationService.teleportToSpawn(opponent, exitLocation)
                     .whenComplete((result, ex) -> {
@@ -325,6 +324,10 @@ public class DuelListener implements Listener {
                         }
 
                     });
+
+            if (exitLocation == null) {
+                throw new IllegalStateException("A duel has ended, and the exit location for teleporting the players to the spawn is not yet defined");
+            }
 
         }, 20 * 60 * 2);
 

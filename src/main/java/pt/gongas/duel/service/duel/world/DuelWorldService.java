@@ -60,7 +60,7 @@ public class DuelWorldService {
 
     private final SlimeWorld duelTemplateWorld;
 
-    public static final String WORLD_PREFIX = "duel-";
+    private static final String WORLD_PREFIX = "duel-";
 
     public DuelWorldService(DuelPlugin plugin, Logger logger, ExecutorService worldExecutor, AdvancedSlimePaperAPI advancedSlimePaperAPI, SlimeWorld duelTemplateWorld) {
         this.plugin = plugin;

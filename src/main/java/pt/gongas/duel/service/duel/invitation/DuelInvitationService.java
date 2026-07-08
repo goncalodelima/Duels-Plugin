@@ -41,6 +41,7 @@ import pt.gongas.duel.util.CompletableFutureHelper;
 import pt.gongas.duel.util.config.Configuration;
 import pt.gongas.economy.platforms.paper.PaperEconomyPlugin;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -69,6 +70,8 @@ public class DuelInvitationService {
     private final ExecutorService redisExecutor;
 
     private final RTopic invitationTopic;
+
+    private final int invitationTopicId;
 
     private final RMapCache<String, Duel> pendingDuels;
 
@@ -124,8 +127,23 @@ public class DuelInvitationService {
                 .map(miniMessage::deserialize)
                 .toList();
 
-        invitationTopic.addListener(Duel.class, (channel, duel) -> handleInvitation(duel));
+        this.invitationTopicId = invitationTopic.addListener(Duel.class, (channel, duel) -> handleInvitation(duel));
+    }
 
+    public void shutdown() {
+
+        invitationTopic.removeListener(invitationTopicId);
+
+        Collection<? extends Player> players = Bukkit.getOnlinePlayers();
+        String[] uuids = new String[players.size()];
+
+        int i = 0;
+
+        for (Player player : players) {
+            uuids[i++] = player.getUniqueId().toString();
+        }
+
+        pendingDuels.fastRemove(uuids);
     }
 
     public void addPendingDuel(UUID uuid, Duel duel) {
@@ -157,6 +175,10 @@ public class DuelInvitationService {
         }
 
         return new PendingDuel(duel, false);
+    }
+
+    public long getPendingDuelsEstimatedSize() {
+        return localPendingDuels.estimatedSize();
     }
 
     public Duel removeRedisPendingDuel(UUID uuid) {

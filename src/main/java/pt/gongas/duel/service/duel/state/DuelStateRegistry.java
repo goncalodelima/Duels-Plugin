@@ -84,6 +84,10 @@ public class DuelStateRegistry {
         return occurringDuels.remove(playerUuid);
     }
 
+    public int getOccurringDuelsSize() {
+        return occurringDuels.size();
+    }
+
     /**
      * Removes an active duel from the registry for both participants.
      * <p>

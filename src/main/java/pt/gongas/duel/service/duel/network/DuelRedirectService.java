@@ -51,16 +51,21 @@ public class DuelRedirectService {
 
     private final String serverId;
 
+    private final UUID sessionUuid;
+
     private final EconomyApi<Player> economyApi;
 
     private final RTopic redirectTopic;
 
+    private final int redirectTopicId;
+
     private final ExpiringMap<UUID, Duel> redirectingDuels;
 
-    public DuelRedirectService(DuelPlugin plugin, String serverId, RedissonClient redis, EconomyApi<Player> economyApi, DuelInvitationService duelInvitationService) {
+    public DuelRedirectService(DuelPlugin plugin, String serverId, UUID sessionUuid, RedissonClient redis, EconomyApi<Player> economyApi, DuelInvitationService duelInvitationService) {
 
         this.plugin = plugin;
         this.serverId = serverId;
+        this.sessionUuid = sessionUuid;
         this.economyApi = economyApi;
 
         this.redirectTopic = redis.getTopic("duels:redirect");
@@ -69,8 +74,11 @@ public class DuelRedirectService {
             // Nothing to do
         });
 
-        redirectTopic.addListener(String.class, (channel, message) -> handleRedirectMessage(message, duelInvitationService));
+        this.redirectTopicId = this.redirectTopic.addListener(String.class, (channel, message) -> handleRedirectMessage(message, duelInvitationService));
+    }
 
+    public void shutdown() {
+        redirectTopic.removeListener(redirectTopicId);
     }
 
     private void handleRedirectMessage(String message, DuelInvitationService duelInvitationService) {
@@ -79,6 +87,14 @@ public class DuelRedirectService {
         String targetServerId = split[8];
 
         if (!this.serverId.equals(targetServerId)) {
+            return;
+        }
+
+        UUID sessionUUID = UUID.fromString(split[9]);
+
+        // Ignore messages associated with an outdated Redis session.
+        // This can happen if stale Redis data remains after an unexpected server shutdown.
+        if (!sessionUUID.equals(this.sessionUuid)) {
             return;
         }
 
@@ -98,6 +114,7 @@ public class DuelRedirectService {
 
         Duel duel = new Duel(
                 targetServerId,
+                sessionUuid,
                 challengerUuid,
                 challengerName,
                 toRedirect,
@@ -128,7 +145,7 @@ public class DuelRedirectService {
      *                     would be serialized as the literal text "null"
      */
     public void publishRedirectMessage(@NotNull UUID accepterUuid, @NotNull String accepterName, @NotNull String currencyName, @NotNull Duel duel) {
-        redirectTopic.publish(accepterUuid + ":" + accepterName + ":" + duel.getChallengerUuid() + ":" + duel.getChallengerName() + ":" + currencyName + ":" + duel.getCents() + ":" + duel.getCreatedAt() + ":" + duel.getExpireAt() + ":" + duel.getServerId());
+        redirectTopic.publish(accepterUuid + ":" + accepterName + ":" + duel.getChallengerUuid() + ":" + duel.getChallengerName() + ":" + currencyName + ":" + duel.getCents() + ":" + duel.getCreatedAt() + ":" + duel.getExpireAt() + ":" + duel.getServerId() + ":" + duel.getSessionUuid());
     }
 
     public Duel removeRedirectingDuel(UUID challengedUuid) {

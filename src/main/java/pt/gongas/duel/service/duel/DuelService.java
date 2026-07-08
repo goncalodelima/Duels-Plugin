@@ -70,11 +70,15 @@ public class DuelService {
 
     private final String serverId;
 
+    private final UUID sessionUuid;
+
     private final Logger logger;
 
     private final ExecutorService redisExecutor;
 
     private final PlayerNameService playerNameService;
+
+    private final DuelStateRegistry duelStateRegistry;
 
     private final DuelAcceptanceService duelAcceptanceService;
 
@@ -98,15 +102,21 @@ public class DuelService {
 
     private final Component noEnoughBalanceMessage;
 
+    private final Component maxDuelsReached;
+
     private static final long LOCAL_CACHE_GRACE_PERIOD_MILLIS = 1_000L;
 
-    public DuelService(DuelPlugin plugin, String serverId, Logger logger, ExecutorService redisExecutor, PlayerNameService playerNameService, DuelAcceptanceService duelAcceptanceService, DuelMatchmakingService duelMatchmakingService, DuelInvitationService duelInvitationService, EconomyApi<Player> economyApi, Configuration lang) {
+    private static final int MAX_DUELS = 1;
+
+    public DuelService(DuelPlugin plugin, String serverId, UUID sessionUuid, Logger logger, ExecutorService redisExecutor, PlayerNameService playerNameService, DuelStateRegistry duelStateRegistry, DuelAcceptanceService duelAcceptanceService, DuelMatchmakingService duelMatchmakingService, DuelInvitationService duelInvitationService, EconomyApi<Player> economyApi, Configuration lang) {
 
         this.plugin = plugin;
         this.serverId = serverId;
+        this.sessionUuid = sessionUuid;
         this.logger = logger;
         this.redisExecutor = redisExecutor;
         this.playerNameService = playerNameService;
+        this.duelStateRegistry = duelStateRegistry;
         this.duelAcceptanceService = duelAcceptanceService;
         this.duelMatchmakingService = duelMatchmakingService;
         this.duelInvitationService = duelInvitationService;
@@ -121,6 +131,7 @@ public class DuelService {
         this.invalidBetMessage = miniMessage.deserialize(lang.getString("invalid-bet-message", "<red>You cannot place a bet without selecting a valid player."));
         this.foundAndRedirectingMessage = miniMessage.deserialize(lang.getString("found-and-redirecting", "<green>You were matched with a player on a different server. You are being redirected..."));
         this.noEnoughBalanceMessage = miniMessage.deserialize(lang.getString("no-enough-balance-challenger", "<red>You don't have enough money for the selected amount!"));
+        this.maxDuelsReached = miniMessage.deserialize(lang.getString("max-duels-reached", "<red>This server has reached its maximum number of active duels. You can try dueling on another server (use /spawn or /box to switch servers)."));
 
     }
 
@@ -133,6 +144,12 @@ public class DuelService {
             @Nullable Currency currency,
             long cents
     ) {
+
+        if (duelStateRegistry.getOccurringDuelsSize() + duelInvitationService.getPendingDuelsEstimatedSize() > MAX_DUELS) {
+            challengerPlayer.sendMessage(maxDuelsReached);
+            UISoundUtil.playErrorSound(challengerPlayer);
+            return;
+        }
 
         CompletableFutureHelper.runAsync(redisExecutor, logger, () -> {
 
@@ -235,6 +252,7 @@ public class DuelService {
 
         Duel duel = new Duel(
                 serverId,
+                sessionUuid,
                 challengerUuid,
                 challengerName,
                 targetUuid,
@@ -287,6 +305,7 @@ public class DuelService {
 
                         Duel duel = new Duel(
                                 serverId,
+                                sessionUuid,
                                 challengerUuid,
                                 challengerName,
                                 opponentUuid,

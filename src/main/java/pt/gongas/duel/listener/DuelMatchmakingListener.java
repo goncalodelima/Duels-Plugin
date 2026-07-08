@@ -42,15 +42,18 @@ public class DuelMatchmakingListener implements Listener {
 
     private final String serverId;
 
+    private final UUID sessionUuid;
+
     private final DuelAcceptanceService duelAcceptanceService;
 
     private final DuelMatchmakingService duelMatchmakingService;
 
     private final Component opponentOfflineMessage;
 
-    public DuelMatchmakingListener(String serverId, DuelAcceptanceService duelAcceptanceService, DuelMatchmakingService duelMatchmakingService, Configuration lang) {
+    public DuelMatchmakingListener(String serverId, UUID sessionUuid, DuelAcceptanceService duelAcceptanceService, DuelMatchmakingService duelMatchmakingService, Configuration lang) {
 
         this.serverId = serverId;
+        this.sessionUuid = sessionUuid;
         this.duelAcceptanceService = duelAcceptanceService;
         this.duelMatchmakingService = duelMatchmakingService;
 
@@ -80,6 +83,7 @@ public class DuelMatchmakingListener implements Listener {
 
         Duel duel = new Duel(
                 serverId,
+                sessionUuid,
                 opponentPlayer.playerUuid(),
                 opponent.getName(),
                 playerUuid,

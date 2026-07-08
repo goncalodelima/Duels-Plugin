@@ -44,24 +44,27 @@ public class DuelResultRedisService implements DuelResultPublisher {
 
     private final RTopic topic;
 
+    private final int topicId;
+
     public DuelResultRedisService(DuelPlugin plugin, Logger logger, DuelUserSnapshotApplier duelUserSnapshotApplier, RedissonClient redis, ExecutorService redisExecutor) {
+
         this.plugin = plugin;
         this.logger = logger;
         this.duelUserSnapshotApplier = duelUserSnapshotApplier;
         this.redisExecutor = redisExecutor;
         this.topic = redis.getTopic("duel:users");
-        subscribe();
-    }
 
-    public void subscribe() {
-
-        topic.addListener(DuelResultSnapshot.class,
+        this.topicId = topic.addListener(DuelResultSnapshot.class,
                 (ignored, message) ->
                         Bukkit.getScheduler().runTask(plugin,
                                 () -> duelUserSnapshotApplier.applyRaw(message)
                         )
         );
 
+    }
+
+    public void shutdown() {
+        topic.removeListener(topicId);
     }
 
     @Override
