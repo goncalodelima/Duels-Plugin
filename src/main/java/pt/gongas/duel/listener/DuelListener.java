@@ -29,10 +29,12 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.title.TitlePart;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -228,6 +230,30 @@ public class DuelListener implements Listener {
         }
 
         handleDuelEndByLoss(player, uuid, duel, DuelEndReason.LOGOUT);
+    }
+
+    @EventHandler
+    public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+
+        Entity damager = event.getDamager();
+        Entity damaged = event.getEntity();
+
+        if (!(damager instanceof Player damagerPlayer) || !(damaged instanceof Player damagedPlayer)) {
+            return;
+        }
+
+        Duel duel = duelStateRegistry.getDuel(damagerPlayer.getUniqueId());
+
+        if (duel == null || duel.getStatus() != DuelStatus.MATCHED) {
+            event.setCancelled(true);
+            return;
+        }
+
+        UUID opponentUuid = damagerPlayer.getUniqueId().equals(duel.getChallengerUuid()) ? duel.getTargetUuid() : duel.getChallengerUuid();
+
+        if (opponentUuid == null || !damagedPlayer.getUniqueId().equals(opponentUuid)) {
+            event.setCancelled(true);
+        }
     }
 
     @EventHandler
